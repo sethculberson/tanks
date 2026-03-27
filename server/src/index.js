@@ -2,79 +2,117 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { createGameState, updateGameState } from './gameState.js';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import {
+  createRoom,
+  joinRoom,
+  findOrCreateRandomRoom,
+  handleInput,
+  handleRestart,
+  handleDisconnect,
+  getRoomMaze,
+  playerMap,
+} from './rooms.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const isProd = process.env.NODE_ENV === 'production';
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json());
+
+// Serve compiled React client in production
+if (isProd) {
+  const clientDist = join(__dirname, '../../client/dist');
+  app.use(express.static(clientDist));
+}
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: { origin: process.env.CORS_ORIGIN || '*', methods: ['GET', 'POST'] },
 });
-
-let gameState = createGameState();
-let connectedPlayers = {}; // socketId -> playerId
-
-// Game loop
-let lastTime = Date.now();
-const TICK_RATE = 60;
-
-setInterval(() => {
-  const now = Date.now();
-  const dt = (now - lastTime) / 1000;
-  lastTime = now;
-
-  updateGameState(gameState, dt);
-  io.emit('gameState', serializeState(gameState));
-}, 1000 / TICK_RATE);
-
-function serializeState(state) {
-  return {
-    players: state.players,
-    bullets: state.bullets,
-    scores: state.scores,
-    gameOver: state.gameOver,
-    winner: state.winner,
-  };
-}
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Send maze on connect
-  socket.emit('maze', gameState.maze);
-  socket.emit('gameState', serializeState(gameState));
+  // Player wants to create a private room
+  socket.on('create_room', () => {
+    const code = createRoom(socket.id, io);
+    socket.join(code);
+    socket.emit('room_created', { roomCode: code, role: 'p1' });
+  });
 
-  socket.on('input', (data) => {
-    // data: { playerId: 'p1'|'p2', input: { up, down, left, right, shoot } }
-    const { playerId, input } = data;
-    if (gameState.players[playerId]) {
-      gameState.players[playerId].input = input;
+  // Player wants to join a specific room by code
+  socket.on('join_room', ({ roomCode }) => {
+    const code = roomCode?.toUpperCase().trim();
+    const result = joinRoom(code, socket.id, io);
+    if (result.error) {
+      socket.emit('join_error', { message: result.error });
+      return;
+    }
+    socket.join(code);
+
+    // Send maze to both players and notify both of their roles
+    const maze = getRoomMaze(socket.id);
+    io.to(code).emit('maze', maze);
+    // Notify p2 of their role + room
+    socket.emit('matched', { roomCode: code, role: 'p2' });
+    // Notify p1 that opponent joined
+    const p1info = [...playerMap.entries()].find(([, v]) => v.roomCode === code && v.role === 'p1');
+    if (p1info) {
+      io.to(p1info[0]).emit('matched', { roomCode: code, role: 'p1' });
     }
   });
 
+  // Player wants a random match
+  socket.on('random_match', () => {
+    const result = findOrCreateRandomRoom(socket.id, io);
+    if (result.error) {
+      socket.emit('join_error', { message: result.error });
+      return;
+    }
+    socket.join(result.code);
+    if (!result.waiting) {
+      // Both players now matched — notify both
+      const maze = getRoomMaze(socket.id);
+      io.to(result.code).emit('maze', maze);
+      socket.emit('matched', { roomCode: result.code, role: result.role });
+      if (result.partnerSocketId) {
+        io.to(result.partnerSocketId).emit('matched', { roomCode: result.code, role: 'p1' });
+      }
+    }
+    // If waiting: p1 just waits silently until p2 joins
+  });
+
+  // Input from player — server looks up role from socket mapping
+  socket.on('input', (input) => {
+    handleInput(socket.id, input);
+  });
+
+  // Restart game in this room
   socket.on('restart', () => {
-    gameState = createGameState();
-    io.emit('maze', gameState.maze);
-    io.emit('gameState', serializeState(gameState));
+    handleRestart(socket.id);
   });
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
+    const result = handleDisconnect(socket.id);
+    if (result?.otherSocketId) {
+      io.to(result.otherSocketId).emit('opponent_disconnected');
+    }
   });
 });
 
-// REST: get current maze
-app.get('/api/maze', (req, res) => {
-  res.json(gameState.maze);
-});
+// REST
+app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-app.get('/api/state', (req, res) => {
-  res.json(serializeState(gameState));
-});
+// SPA fallback — must be after API routes
+if (isProd) {
+  app.get('*', (req, res) => res.sendFile(join(__dirname, '../../client/dist/index.html')));
+}
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
   console.log(`Tank Trouble server running on port ${PORT}`);
 });
