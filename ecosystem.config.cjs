@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'tank-trouble',
       script: './server/src/index.js',
-      cwd: '/root/tank',
+      cwd: '~/tank',
       env_production: {
         NODE_ENV: 'production',
         PORT: 3001,
