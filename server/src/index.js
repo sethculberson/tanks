@@ -17,6 +17,7 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === 'production';
+const clientDist = join(__dirname, '../../client/dist');
 
 const app = express();
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
@@ -24,7 +25,6 @@ app.use(express.json());
 
 // Serve compiled React client in production
 if (isProd) {
-  const clientDist = join(__dirname, '../../client/dist');
   app.use(express.static(clientDist));
 }
 
@@ -109,7 +109,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // SPA fallback — must be after API routes
 if (isProd) {
-  app.get('*', (req, res) => res.sendFile(join(__dirname, '../../client/dist/index.html')));
+  app.get('*', (req, res) => res.sendFile(join(clientDist, 'index.html')));
 }
 
 const PORT = process.env.PORT || 3001;
