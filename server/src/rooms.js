@@ -153,3 +153,10 @@ export {
   getRoomMaze,
   playerMap,
 };
+
+// Test helper — only used in tests
+export function _resetForTesting() {
+  rooms.clear();
+  playerMap.clear();
+  queue.length = 0;
+}

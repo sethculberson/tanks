@@ -117,9 +117,10 @@ export function updateGameState(state, dt) {
       bullet.x = bullet.x + bullet.vx * stepDt;
       bullet.y = bullet.y + bullet.vy * stepDt;
 
-      // Tank hit detection
+      // Tank hit detection — bullet cannot hit its own owner
       for (const [pid, tank] of Object.entries(players)) {
         if (!tank.alive) continue;
+        if (pid === bullet.owner) continue;
         const dist = Math.hypot(bullet.x - tank.x, bullet.y - tank.y);
         if (dist < TANK_RADIUS + BULLET_RADIUS) {
           tank.alive = false;
