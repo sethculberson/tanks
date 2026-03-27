@@ -1,4 +1,5 @@
 import { createGameState, updateGameState } from './gameState.js';
+import { updateUserStats, getUser } from './userService.js';
 
 // roomCode -> Room
 const rooms = new Map();
@@ -31,13 +32,58 @@ function serializeState(state) {
 function startRoomLoop(room) {
   if (room.intervalId) return;
   room.lastTime = Date.now();
-  room.intervalId = setInterval(() => {
+  room.statsCommitted = false;
+  room.intervalId = setInterval(async () => {
     const now = Date.now();
     const dt = (now - room.lastTime) / 1000;
     room.lastTime = now;
     updateGameState(room.state, dt);
     room.io.to(room.code).emit('gameState', serializeState(room.state));
+
+    // Persist round stats exactly once when the game ends
+    if (room.state.gameOver && !room.statsCommitted) {
+      room.statsCommitted = true;
+      await commitRoundStats(room);
+    }
   }, 1000 / TICK_RATE);
+}
+
+async function commitRoundStats(room) {
+  const { winner, roundStats } = room.state;
+  const tasks = [];
+
+  for (const role of ['p1', 'p2']) {
+    const username = room.usernames[role];
+    if (!username) continue;
+    tasks.push(
+      updateUserStats(username, {
+        totalGames: 1,
+        totalWins: winner === role ? 1 : 0,
+        totalLosses: winner !== role ? 1 : 0,
+        ...roundStats[role],
+      })
+    );
+  }
+  await Promise.all(tasks);
+
+  // Push refreshed stats back to each player
+  for (const role of ['p1', 'p2']) {
+    const socketId = room.players[role];
+    const username = room.usernames[role];
+    if (!socketId || !username) continue;
+    const result = await getUser(username);
+    if (result.success) {
+      room.io.to(socketId).emit('stats_updated', result.user);
+    }
+  }
+}
+
+function setRoomUsername(socketId, username) {
+  const info = playerMap.get(socketId);
+  if (!info) return;
+  const room = rooms.get(info.roomCode);
+  if (!room) return;
+  room.usernames[info.role] = username ? username.toLowerCase().trim() : null;
 }
 
 function createRoom(p1SocketId, io) {
@@ -46,9 +92,11 @@ function createRoom(p1SocketId, io) {
     code,
     state: createGameState(),
     players: { p1: p1SocketId, p2: null },
+    usernames: { p1: null, p2: null },
     io,
     intervalId: null,
     lastTime: Date.now(),
+    statsCommitted: false,
   };
   rooms.set(code, room);
   playerMap.set(p1SocketId, { roomCode: code, role: 'p1' });
@@ -106,6 +154,7 @@ function handleRestart(socketId) {
   const scores = { ...room.state.scores };
   room.state = createGameState();
   room.state.scores = scores;
+  room.statsCommitted = false;
   room.io.to(info.roomCode).emit('maze', room.state.maze);
   startRoomLoop(room);
   return true;
@@ -151,6 +200,7 @@ export {
   handleRestart,
   handleDisconnect,
   getRoomMaze,
+  setRoomUsername,
   playerMap,
 };
 

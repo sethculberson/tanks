@@ -45,4 +45,4 @@ jobs:
             git pull origin main
             cd client && npm install && npm run build
             cd ../server && npm install --omit=dev
-            pm2 restart tank-trouble
+            pm2 restart ecosystem.config.cjs --env production

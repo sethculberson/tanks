@@ -25,6 +25,11 @@ export function createGameState() {
     gameOver: false,
     winner: null,
     bulletIdCounter: 0,
+    // Per-round stats reset each game; aggregated into Firestore on game end
+    roundStats: {
+      p1: { shotsFired: 0, shotsHit: 0, shotsSelf: 0, shotsExpired: 0 },
+      p2: { shotsFired: 0, shotsHit: 0, shotsSelf: 0, shotsExpired: 0 },
+    },
   };
 }
 
@@ -82,6 +87,7 @@ export function updateGameState(state, dt) {
     if (tank.shootCooldown > 0) tank.shootCooldown -= dt;
     if (input.shoot && tank.shootCooldown <= 0) {
       tank.shootCooldown = 0.5;
+      state.roundStats[id].shotsFired++;
       const angleRad = (tank.angle - 90) * Math.PI / 180;
       state.bullets.push({
         id: `bullet_${state.bulletIdCounter++}`,
@@ -99,8 +105,14 @@ export function updateGameState(state, dt) {
   // Update bullets
   state.bullets = state.bullets.filter(bullet => {
     bullet.lifetime -= dt;
-    if (bullet.lifetime <= 0) return false;
-    if (bullet.bounces > MAX_BOUNCES) return false;
+    if (bullet.lifetime <= 0) {
+      state.roundStats[bullet.owner].shotsExpired++;
+      return false;
+    }
+    if (bullet.bounces > MAX_BOUNCES) {
+      state.roundStats[bullet.owner].shotsExpired++;
+      return false;
+    }
 
     const steps = 5;
     for (let s = 0; s < steps; s++) {
@@ -125,6 +137,7 @@ export function updateGameState(state, dt) {
         if (dist < TANK_RADIUS + BULLET_RADIUS) {
           tank.alive = false;
           const winner = bullet.owner;
+          state.roundStats[winner].shotsHit++;
           state.scores[winner]++;
           state.gameOver = true;
           state.winner = winner;

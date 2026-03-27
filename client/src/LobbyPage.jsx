@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from './SocketContext';
 
@@ -7,28 +7,70 @@ export default function LobbyPage() {
   const {
     lobbyError, lobbyWaiting, roomCode,
     createRoom, joinRoom, randomMatch,
-    onMatchedRef,
+    onMatchedRef, currentUser, logout,
   } = useSocket();
 
   const [codeInput, setCodeInput] = useState('');
+  const [showStats, setShowStats] = useState(false);
 
   // Navigate to game when matched
-  useEffect(() => {
+  useState(() => {
     onMatchedRef.current = (code) => {
       navigate(`/game/${code}`);
     };
     return () => { onMatchedRef.current = null; };
-  }, [navigate, onMatchedRef]);
+  });
 
   const handleJoin = () => {
     joinRoom(codeInput);
   };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/account', { replace: true });
+  };
+
+  const s = currentUser?.stats;
+  const accuracy = s?.shotsFired > 0
+    ? ((s.shotsHit / s.shotsFired) * 100).toFixed(1)
+    : '—';
 
   return (
     <div className="page-center">
       <h1 className="game-title">TANK TROUBLE</h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 340 }}>
+
+        {/* Account banner */}
+        {currentUser && (
+          <div className="window" style={{ width: '100%' }}>
+            <div className="title-bar">
+              <div className="title-bar-text">Account — {currentUser.username}</div>
+            </div>
+            <div className="window-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button onClick={() => setShowStats(v => !v)}>
+                {showStats ? 'Hide Stats' : 'Show Stats'}
+              </button>
+              <button onClick={handleLogout}>Log Out</button>
+            </div>
+            {showStats && s && (
+              <div className="window-body" style={{ paddingTop: 0 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <tbody>
+                    <tr><td>Games Played</td><td align="right">{s.totalGames}</td></tr>
+                    <tr><td>Wins</td><td align="right">{s.totalWins}</td></tr>
+                    <tr><td>Losses</td><td align="right">{s.totalLosses}</td></tr>
+                    <tr><td>Shots Fired</td><td align="right">{s.shotsFired}</td></tr>
+                    <tr><td>Shots Hit (opponent)</td><td align="right">{s.shotsHit}</td></tr>
+                    <tr><td>Shots Hit (self)</td><td align="right">{s.shotsSelf}</td></tr>
+                    <tr><td>Shots Missed</td><td align="right">{s.shotsExpired}</td></tr>
+                    <tr><td>Accuracy</td><td align="right">{accuracy}%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Random Match */}
         <div className="window" style={{ width: '100%' }}>
@@ -96,3 +138,4 @@ export default function LobbyPage() {
     </div>
   );
 }
+

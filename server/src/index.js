@@ -4,6 +4,8 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { initFirebase } from './firebase.js';
+import userRoutes from './userRoutes.js';
 import {
   createRoom,
   joinRoom,
@@ -12,8 +14,11 @@ import {
   handleRestart,
   handleDisconnect,
   getRoomMaze,
+  setRoomUsername,
   playerMap,
 } from './rooms.js';
+
+initFirebase();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === 'production';
@@ -85,6 +90,11 @@ io.on('connection', (socket) => {
     // If waiting: p1 just waits silently until p2 joins
   });
 
+  // Associate a logged-in username with this socket's room slot
+  socket.on('set_username', (username) => {
+    setRoomUsername(socket.id, username ?? null);
+  });
+
   // Input from player — server looks up role from socket mapping
   socket.on('input', (input) => {
     handleInput(socket.id, input);
@@ -105,6 +115,7 @@ io.on('connection', (socket) => {
 });
 
 // REST
+app.use('/api/auth', userRoutes);
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // SPA fallback — must be after API routes

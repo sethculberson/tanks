@@ -6,6 +6,17 @@ const socket = io(SERVER_URL);
 
 const SocketContext = createContext(null);
 
+const STORAGE_KEY = 'tank_user';
+
+function loadStoredUser() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function SocketProvider({ children }) {
   const mazeRef = useRef(null);
   const gameStateRef = useRef(null);
@@ -22,8 +33,18 @@ export function SocketProvider({ children }) {
   const onMatchedRef = useRef(null);
   const onMazeRef = useRef(null);
 
+  // Auth state
+  const [currentUser, setCurrentUser] = useState(() => loadStoredUser());
+  const [authError, setAuthError] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // Re-associate username whenever socket reconnects
   useEffect(() => {
-    socket.on('connect', () => setConnected(true));
+    socket.on('connect', () => {
+      setConnected(true);
+      const user = loadStoredUser();
+      if (user?.username) socket.emit('set_username', user.username);
+    });
     socket.on('disconnect', () => setConnected(false));
 
     socket.on('room_created', ({ roomCode: code }) => {
@@ -63,6 +84,12 @@ export function SocketProvider({ children }) {
       setOpponentLeft(true);
     });
 
+    // Receive updated stats after a round ends
+    socket.on('stats_updated', (updatedUser) => {
+      setCurrentUser(updatedUser);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -72,8 +99,60 @@ export function SocketProvider({ children }) {
       socket.off('gameState');
       socket.off('join_error');
       socket.off('opponent_disconnected');
+      socket.off('stats_updated');
     };
   }, []);
+
+  // Auth helpers
+  async function login(username, password) {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAuthError(data.error); return false; }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
+      setCurrentUser(data.user);
+      socket.emit('set_username', data.user.username);
+      return true;
+    } catch {
+      setAuthError('Network error — could not reach server');
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function register(username, password) {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAuthError(data.error); return false; }
+      // Auto-login after registration
+      return await login(username, password);
+    } catch {
+      setAuthError('Network error — could not reach server');
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem(STORAGE_KEY);
+    setCurrentUser(null);
+    socket.emit('set_username', null);
+  }
 
   const createRoom = () => {
     setLobbyError(null);
@@ -112,6 +191,7 @@ export function SocketProvider({ children }) {
       opponentLeft, lobbyError, lobbyWaiting,
       mazeRef, gameStateRef, onMatchedRef, onMazeRef,
       createRoom, joinRoom, randomMatch, sendInput, restart, resetLobby,
+      currentUser, authError, authLoading, login, register, logout,
     }}>
       {children}
     </SocketContext.Provider>
@@ -121,3 +201,4 @@ export function SocketProvider({ children }) {
 export function useSocket() {
   return useContext(SocketContext);
 }
+
