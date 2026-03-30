@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSocket } from './SocketContext';
+import { useSocket } from '../context/SocketContext.tsx';
 
 export default function AccountPage() {
   const navigate = useNavigate();
   const { login, register, currentUser, authError, authLoading } = useSocket();
 
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -16,7 +16,7 @@ export default function AccountPage() {
     return null;
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const ok = mode === 'login'
       ? await login(username, password)

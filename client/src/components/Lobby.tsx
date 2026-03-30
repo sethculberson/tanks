@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 
-export default function Lobby({ onRandomMatch, onCreateRoom, onJoinRoom, error, waiting, roomCode }) {
+interface LobbyProps {
+  onRandomMatch: () => void;
+  onCreateRoom: () => void;
+  onJoinRoom: (code: string) => void;
+  error: string | null;
+  waiting: boolean;
+  roomCode: string | null;
+}
+
+export default function Lobby({ onRandomMatch, onCreateRoom, onJoinRoom, error, waiting, roomCode }: LobbyProps) {
   const [codeInput, setCodeInput] = useState('');
 
-  const labelStyle = {
+  const labelStyle: React.CSSProperties = {
     fontFamily: "'Times New Roman', Times, serif",
     fontSize: 14,
     color: '#5a3e28',
@@ -11,7 +20,7 @@ export default function Lobby({ onRandomMatch, onCreateRoom, onJoinRoom, error, 
     display: 'block',
   };
 
-  const sectionStyle = {
+  const sectionStyle: React.CSSProperties = {
     background: '#e8d9c4',
     border: '2px inset #a08060',
     padding: '16px 20px',
@@ -21,7 +30,7 @@ export default function Lobby({ onRandomMatch, onCreateRoom, onJoinRoom, error, 
     gap: 8,
   };
 
-  const btnStyle = {
+  const btnStyle: React.CSSProperties = {
     padding: '7px 18px',
     fontFamily: "'Times New Roman', Times, serif",
     fontSize: 15,
@@ -32,7 +41,7 @@ export default function Lobby({ onRandomMatch, onCreateRoom, onJoinRoom, error, 
     alignSelf: 'flex-start',
   };
 
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     fontFamily: "'Times New Roman', Times, serif",
     fontSize: 18,
     letterSpacing: 4,

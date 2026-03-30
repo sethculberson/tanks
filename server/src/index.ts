@@ -4,8 +4,8 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { initFirebase } from './firebase.js';
-import userRoutes from './userRoutes.js';
+import { initFirebase } from './services/firebase.js';
+import userRoutes from './routes/userRoutes.js';
 import {
   createRoom,
   joinRoom,
@@ -16,7 +16,8 @@ import {
   getRoomMaze,
   setRoomUsername,
   playerMap,
-} from './rooms.js';
+} from './game/rooms.js';
+import type { PlayerInput } from './game/gameState.js';
 
 initFirebase();
 
@@ -49,10 +50,10 @@ io.on('connection', (socket) => {
   });
 
   // Player wants to join a specific room by code
-  socket.on('join_room', ({ roomCode }) => {
+  socket.on('join_room', ({ roomCode }: { roomCode: string }) => {
     const code = roomCode?.toUpperCase().trim();
     const result = joinRoom(code, socket.id, io);
-    if (result.error) {
+    if ('error' in result) {
       socket.emit('join_error', { message: result.error });
       return;
     }
@@ -91,12 +92,12 @@ io.on('connection', (socket) => {
   });
 
   // Associate a logged-in username with this socket's room slot
-  socket.on('set_username', (username) => {
+  socket.on('set_username', (username: string | null) => {
     setRoomUsername(socket.id, username ?? null);
   });
 
   // Input from player — server looks up role from socket mapping
-  socket.on('input', (input) => {
+  socket.on('input', (input: PlayerInput) => {
     handleInput(socket.id, input);
   });
 
@@ -116,11 +117,11 @@ io.on('connection', (socket) => {
 
 // REST
 app.use('/api/auth', userRoutes);
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // SPA fallback — must be after API routes
 if (isProd) {
-  app.get('*', (req, res) => res.sendFile(join(clientDist, 'index.html')));
+  app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
 }
 
 const PORT = process.env.PORT || 3001;

@@ -9,14 +9,15 @@ import {
   getRoomMaze,
   playerMap,
   _resetForTesting,
-} from './rooms.js';
+} from '../../src/game/rooms.js';
+import type { Server } from 'socket.io';
 
 // Mock io object
 function mockIo() {
   return {
     to: vi.fn().mockReturnThis(),
     emit: vi.fn(),
-  };
+  } as unknown as Server;
 }
 
 beforeEach(() => {
@@ -34,7 +35,7 @@ describe('createRoom', () => {
   it('assigns p1 role to the creator', () => {
     const io = mockIo();
     const code = createRoom('socket1', io);
-    const info = playerMap.get('socket1');
+    const info = playerMap.get('socket1')!;
     expect(info.role).toBe('p1');
     expect(info.roomCode).toBe(code);
   });
@@ -54,7 +55,7 @@ describe('joinRoom', () => {
     const io = mockIo();
     const code = createRoom('p1socket', io);
     joinRoom(code, 'p2socket', io);
-    const info = playerMap.get('p2socket');
+    const info = playerMap.get('p2socket')!;
     expect(info.role).toBe('p2');
     expect(info.roomCode).toBe(code);
   });
@@ -62,7 +63,7 @@ describe('joinRoom', () => {
   it('returns error for nonexistent room', () => {
     const io = mockIo();
     const result = joinRoom('ZZZZ', 'socket1', io);
-    expect(result.error).toBeDefined();
+    expect('error' in result).toBe(true);
   });
 
   it('returns error when room is already full', () => {
@@ -70,14 +71,14 @@ describe('joinRoom', () => {
     const code = createRoom('p1socket', io);
     joinRoom(code, 'p2socket', io);
     const result = joinRoom(code, 'p3socket', io);
-    expect(result.error).toBe('Room is full');
+    expect('error' in result && result.error).toBe('Room is full');
   });
 
   it('returns success for valid join', () => {
     const io = mockIo();
     const code = createRoom('p1socket', io);
     const result = joinRoom(code, 'p2socket', io);
-    expect(result.success).toBe(true);
+    expect('success' in result).toBe(true);
   });
 
   it('is case-insensitive for room codes', () => {
@@ -141,7 +142,7 @@ describe('handleInput', () => {
   });
 
   it('ignores input from unknown socket', () => {
-    expect(() => handleInput('unknown', { up: true })).not.toThrow();
+    expect(() => handleInput('unknown', { up: true, down: false, left: false, right: false, shoot: false })).not.toThrow();
   });
 });
 
@@ -158,7 +159,7 @@ describe('handleDisconnect', () => {
     const code = createRoom('p1socket', io);
     joinRoom(code, 'p2socket', io);
     const result = handleDisconnect('p1socket');
-    expect(result.otherSocketId).toBe('p2socket');
+    expect(result!.otherSocketId).toBe('p2socket');
   });
 
   it('cleans up other player from map when one disconnects', () => {
@@ -190,8 +191,8 @@ describe('getRoomMaze', () => {
     createRoom('p1socket', io);
     const maze = getRoomMaze('p1socket');
     expect(maze).not.toBeNull();
-    expect(maze.cols).toBe(15);
-    expect(maze.rows).toBe(11);
+    expect(maze!.cols).toBe(15);
+    expect(maze!.rows).toBe(11);
   });
 
   it('returns null for unknown socket', () => {

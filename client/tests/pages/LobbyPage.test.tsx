@@ -1,22 +1,24 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import type { SocketContextValue } from '../../src/context/SocketContext.tsx';
 
 // Mock useSocket
-vi.mock('./SocketContext', () => ({
+vi.mock('../../src/context/SocketContext.tsx', () => ({
   useSocket: vi.fn(),
 }));
 // Mock useNavigate
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import('react-router-dom')>();
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-import { useSocket } from './SocketContext';
-import LobbyPage from './LobbyPage';
+import { useSocket } from '../../src/context/SocketContext.tsx';
+import LobbyPage from '../../src/pages/LobbyPage.tsx';
 
-function defaultSocketValues(overrides = {}) {
+function defaultSocketValues(overrides: Partial<SocketContextValue> = {}): SocketContextValue {
   return {
     lobbyError: null,
     lobbyWaiting: false,
@@ -26,11 +28,11 @@ function defaultSocketValues(overrides = {}) {
     randomMatch: vi.fn(),
     onMatchedRef: { current: null },
     ...overrides,
-  };
+  } as SocketContextValue;
 }
 
-function renderLobby(socketValues = {}) {
-  useSocket.mockReturnValue(defaultSocketValues(socketValues));
+function renderLobby(socketValues: Partial<SocketContextValue> = {}) {
+  vi.mocked(useSocket).mockReturnValue(defaultSocketValues(socketValues));
   return render(
     <MemoryRouter>
       <LobbyPage />
@@ -104,7 +106,7 @@ describe('LobbyPage', () => {
 
   it('uppercases typed room code input', () => {
     renderLobby();
-    const input = screen.getByPlaceholderText('XXXX');
+    const input = screen.getByPlaceholderText('XXXX') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'abcd' } });
     expect(input.value).toBe('ABCD');
   });
@@ -115,7 +117,7 @@ describe('LobbyPage', () => {
   });
 
   it('navigates to /game/:code when onMatchedRef fires', () => {
-    const onMatchedRef = { current: null };
+    const onMatchedRef: React.MutableRefObject<((code: string) => void) | null> = { current: null };
     renderLobby({ onMatchedRef });
     // Simulate server calling back with room code
     onMatchedRef.current?.('XYZW');

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSocket } from './SocketContext';
+import { useSocket } from '../context/SocketContext.tsx';
 
 export default function LobbyPage() {
   const navigate = useNavigate();
@@ -15,7 +15,7 @@ export default function LobbyPage() {
 
   // Navigate to game when matched
   useState(() => {
-    onMatchedRef.current = (code) => {
+    onMatchedRef.current = (code: string) => {
       navigate(`/game/${code}`);
     };
     return () => { onMatchedRef.current = null; };
@@ -31,7 +31,7 @@ export default function LobbyPage() {
   };
 
   const s = currentUser?.stats;
-  const accuracy = s?.shotsFired > 0
+  const accuracy = s?.shotsFired != null && s.shotsFired > 0
     ? ((s.shotsHit / s.shotsFired) * 100).toFixed(1)
     : '—';
 

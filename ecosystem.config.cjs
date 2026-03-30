@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'tank-trouble',
-      script: './server/src/index.js',
+      script: './server/dist/index.js',
       cwd: '/home/sethculb/tank',
       env_production: {
         NODE_ENV: 'production',

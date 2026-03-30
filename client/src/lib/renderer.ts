@@ -1,3 +1,5 @@
+import type { Maze, SerializedGameState, TankState } from '../context/SocketContext.tsx';
+
 const CELL_SIZE = 60;
 const WALL_WIDTH = 5;
 // Wooden palette
@@ -6,8 +8,9 @@ const FLOOR_B = '#c49558';   // darker wood plank
 const WALL_COLOR = '#3b1f0a'; // dark walnut
 const BG_COLOR = '#b8833a';
 
-export function drawGame(canvas, maze, state) {
+export function drawGame(canvas: HTMLCanvasElement, maze: Maze, state: SerializedGameState): void {
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   const { cols, rows, cells } = maze;
 
   canvas.width = cols * CELL_SIZE;
@@ -73,7 +76,7 @@ export function drawGame(canvas, maze, state) {
   }
 }
 
-function drawTank(ctx, tank, id) {
+function drawTank(ctx: CanvasRenderingContext2D, tank: TankState, id: string): void {
   // Muted earthy colors: olive green vs dark maroon
   const bodyColor  = id === 'p1' ? '#6b7c3a' : '#7c3a3a';
   const darkColor  = id === 'p1' ? '#3d4a1f' : '#4a1f1f';

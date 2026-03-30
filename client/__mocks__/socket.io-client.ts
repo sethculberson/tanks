@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-const mockSocket = {
+export const mockSocket = {
   on: vi.fn(),
   off: vi.fn(),
   emit: vi.fn(),
@@ -9,4 +9,4 @@ const mockSocket = {
 
 const io = vi.fn(() => mockSocket);
 
-export { io as default, mockSocket };
+export default io;

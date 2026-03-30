@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { drawGame } from './renderer';
-import Lobby from './Lobby';
+import { drawGame } from './lib/renderer.ts';
+import Lobby from './components/Lobby.tsx';
+import type { Maze, SerializedGameState } from './context/SocketContext.tsx';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? '';
 const socket = io(SERVER_URL);
@@ -9,19 +10,19 @@ const socket = io(SERVER_URL);
 const CELL_SIZE = 60;
 
 export default function App() {
-  const canvasRef = useRef(null);
-  const mazeRef = useRef(null);
-  const gameStateRef = useRef(null);
-  const keysRef = useRef({});
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const mazeRef = useRef<Maze | null>(null);
+  const gameStateRef = useRef<SerializedGameState | null>(null);
+  const keysRef = useRef<Record<string, boolean>>({});
 
-  const [screen, setScreen] = useState('lobby'); // 'lobby' | 'game'
-  const [role, setRole] = useState(null);         // 'p1' | 'p2'
-  const [roomCode, setRoomCode] = useState(null);
+  const [screen, setScreen] = useState<'lobby' | 'game'>('lobby');
+  const [role, setRole] = useState<string | null>(null);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [scores, setScores] = useState({ p1: 0, p2: 0 });
   const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState(null);
-  const [lobbyError, setLobbyError] = useState(null);
+  const [winner, setWinner] = useState<string | null>(null);
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
   const [lobbyWaiting, setLobbyWaiting] = useState(false);
   const [opponentLeft, setOpponentLeft] = useState(false);
 
@@ -81,13 +82,13 @@ export default function App() {
 
   // Keyboard capture
   useEffect(() => {
-    const down = (e) => {
+    const down = (e: KeyboardEvent) => {
       keysRef.current[e.code] = true;
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         e.preventDefault();
       }
     };
-    const up = (e) => { keysRef.current[e.code] = false; };
+    const up = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
@@ -115,7 +116,7 @@ export default function App() {
 
   // Canvas render loop
   useEffect(() => {
-    let animId;
+    let animId: number;
     const render = () => {
       const canvas = canvasRef.current;
       if (canvas && mazeRef.current && gameStateRef.current) {
@@ -139,7 +140,7 @@ export default function App() {
     socket.emit('create_room');
   };
 
-  const handleJoinRoom = (code) => {
+  const handleJoinRoom = (code: string) => {
     if (!code || code.length < 4) { setLobbyError('Please enter a 4-letter code'); return; }
     setLobbyError(null);
     socket.emit('join_room', { roomCode: code });

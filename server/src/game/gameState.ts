@@ -1,4 +1,5 @@
 import { generateMaze } from './maze.js';
+import type { Maze } from './maze.js';
 
 const CELL_SIZE = 60;
 const TANK_SPEED = 120; // pixels per second
@@ -9,10 +10,59 @@ const MAX_BOUNCES = 5;
 const BULLET_RADIUS = 4;
 const TANK_RADIUS = 14;
 
-export function createGameState() {
+export type PlayerId = 'p1' | 'p2';
+
+export interface PlayerInput {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+  shoot: boolean;
+}
+
+export interface Tank {
+  id: PlayerId;
+  x: number;
+  y: number;
+  angle: number;
+  alive: boolean;
+  input: PlayerInput;
+  shootCooldown: number;
+}
+
+export interface Bullet {
+  id: string;
+  owner: PlayerId;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  bounces: number;
+  lifetime: number;
+}
+
+export interface RoundStats {
+  shotsFired: number;
+  shotsHit: number;
+  shotsSelf: number;
+  shotsExpired: number;
+}
+
+export interface GameState {
+  maze: Maze;
+  players: Record<PlayerId, Tank>;
+  bullets: Bullet[];
+  scores: Record<PlayerId, number>;
+  gameOver: boolean;
+  winner: PlayerId | null;
+  bulletIdCounter: number;
+  roundStats: Record<PlayerId, RoundStats>;
+}
+
+export function createGameState(): GameState {
   const maze = generateMaze(15, 11);
 
-  const players = {
+  const players: Record<PlayerId, Tank> = {
     p1: createTank(1, maze),
     p2: createTank(2, maze),
   };
@@ -33,13 +83,13 @@ export function createGameState() {
   };
 }
 
-function createTank(playerNum, maze) {
+function createTank(playerNum: number, maze: Maze): Tank {
   // Spawn positions: p1 top-left area, p2 bottom-right area
   const spawnCell = playerNum === 1
     ? { x: 1, y: 1 }
     : { x: maze.cols - 2, y: maze.rows - 2 };
   return {
-    id: `p${playerNum}`,
+    id: `p${playerNum}` as PlayerId,
     x: spawnCell.x * CELL_SIZE + CELL_SIZE / 2,
     y: spawnCell.y * CELL_SIZE + CELL_SIZE / 2,
     angle: playerNum === 1 ? 0 : 180,
@@ -49,13 +99,13 @@ function createTank(playerNum, maze) {
   };
 }
 
-export function updateGameState(state, dt) {
+export function updateGameState(state: GameState, dt: number): void {
   if (state.gameOver) return;
 
   const { maze, players, bullets } = state;
 
   // Update tanks
-  for (const [id, tank] of Object.entries(players)) {
+  for (const [id, tank] of Object.entries(players) as [PlayerId, Tank][]) {
     if (!tank.alive) continue;
     const { input } = tank;
 
@@ -103,7 +153,7 @@ export function updateGameState(state, dt) {
   }
 
   // Update bullets
-  state.bullets = state.bullets.filter(bullet => {
+  state.bullets = bullets.filter(bullet => {
     bullet.lifetime -= dt;
     if (bullet.lifetime <= 0) {
       state.roundStats[bullet.owner].shotsExpired++;
@@ -130,7 +180,7 @@ export function updateGameState(state, dt) {
       bullet.y = bullet.y + bullet.vy * stepDt;
 
       // Tank hit detection — bullet cannot hit its own owner
-      for (const [pid, tank] of Object.entries(players)) {
+      for (const [pid, tank] of Object.entries(players) as [PlayerId, Tank][]) {
         if (!tank.alive) continue;
         if (pid === bullet.owner) continue;
         const dist = Math.hypot(bullet.x - tank.x, bullet.y - tank.y);
@@ -149,7 +199,7 @@ export function updateGameState(state, dt) {
   });
 }
 
-function collidesWithWall(x, y, radius, maze) {
+function collidesWithWall(x: number, y: number, radius: number, maze: Maze): boolean {
   // Check the cells this circle overlaps and test relevant walls
   const { cells, cols, rows } = maze;
   const left = Math.floor((x - radius) / CELL_SIZE);

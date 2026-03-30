@@ -1,25 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { SocketContextValue } from '../../src/context/SocketContext.tsx';
 
-vi.mock('./SocketContext', () => ({
+vi.mock('../../src/context/SocketContext.tsx', () => ({
   useSocket: vi.fn(),
 }));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import('react-router-dom')>();
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock('./renderer', () => ({
+vi.mock('../../src/lib/renderer.ts', () => ({
   drawGame: vi.fn(),
 }));
 
-import { useSocket } from './SocketContext';
-import GamePage from './GamePage';
+import { useSocket } from '../../src/context/SocketContext.tsx';
+import GamePage from '../../src/pages/GamePage.tsx';
 
-function defaultSocketValues(overrides = {}) {
+function defaultSocketValues(overrides: Partial<SocketContextValue> = {}): SocketContextValue {
   return {
     connected: true,
     role: 'p1',
@@ -33,11 +34,11 @@ function defaultSocketValues(overrides = {}) {
     restart: vi.fn(),
     resetLobby: vi.fn(),
     ...overrides,
-  };
+  } as SocketContextValue;
 }
 
-function renderGame(socketValues = {}, gameId = 'ABCD') {
-  useSocket.mockReturnValue(defaultSocketValues(socketValues));
+function renderGame(socketValues: Partial<SocketContextValue> = {}, gameId = 'ABCD') {
+  vi.mocked(useSocket).mockReturnValue(defaultSocketValues(socketValues));
   return render(
     <MemoryRouter initialEntries={[`/game/${gameId}`]}>
       <Routes>

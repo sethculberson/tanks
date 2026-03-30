@@ -4,11 +4,102 @@ import { io } from 'socket.io-client';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? '';
 const socket = io(SERVER_URL);
 
-const SocketContext = createContext(null);
+// ── Shared types ──────────────────────────────────────────────────────────────
+
+export type PlayerId = 'p1' | 'p2';
+
+export interface PlayerInput {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+  shoot: boolean;
+}
+
+export interface MazeCell {
+  x: number;
+  y: number;
+  walls: { N: boolean; S: boolean; E: boolean; W: boolean };
+}
+
+export interface Maze {
+  cells: MazeCell[][];
+  cols: number;
+  rows: number;
+}
+
+export interface TankState {
+  x: number;
+  y: number;
+  angle: number;
+  alive: boolean;
+}
+
+export interface BulletState {
+  id: string;
+  owner: string;
+  x: number;
+  y: number;
+}
+
+export interface SerializedGameState {
+  players: Record<string, TankState>;
+  bullets: BulletState[];
+  scores: { p1: number; p2: number };
+  gameOver: boolean;
+  winner: string | null;
+}
+
+export interface UserStats {
+  totalGames: number;
+  totalWins: number;
+  totalLosses: number;
+  shotsFired: number;
+  shotsHit: number;
+  shotsSelf: number;
+  shotsExpired: number;
+}
+
+export interface User {
+  username: string;
+  stats?: UserStats;
+}
+
+export interface SocketContextValue {
+  connected: boolean;
+  role: PlayerId | null;
+  roomCode: string | null;
+  scores: { p1: number; p2: number };
+  gameOver: boolean;
+  winner: string | null;
+  opponentLeft: boolean;
+  lobbyError: string | null;
+  lobbyWaiting: boolean;
+  mazeRef: React.MutableRefObject<Maze | null>;
+  gameStateRef: React.MutableRefObject<SerializedGameState | null>;
+  onMatchedRef: React.MutableRefObject<((code: string) => void) | null>;
+  onMazeRef: React.MutableRefObject<((maze: Maze) => void) | null>;
+  createRoom: () => void;
+  joinRoom: (code: string) => void;
+  randomMatch: () => void;
+  sendInput: (input: PlayerInput) => void;
+  restart: () => void;
+  resetLobby: () => void;
+  currentUser: User | null;
+  authError: string | null;
+  authLoading: boolean;
+  login: (username: string, password: string) => Promise<boolean>;
+  register: (username: string, password: string) => Promise<boolean>;
+  logout: () => void;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SocketContext = createContext<SocketContextValue | null>(null);
 
 const STORAGE_KEY = 'tank_user';
 
-function loadStoredUser() {
+function loadStoredUser(): User | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -17,25 +108,25 @@ function loadStoredUser() {
   }
 }
 
-export function SocketProvider({ children }) {
-  const mazeRef = useRef(null);
-  const gameStateRef = useRef(null);
+export function SocketProvider({ children }: { children: React.ReactNode }) {
+  const mazeRef = useRef<Maze | null>(null);
+  const gameStateRef = useRef<SerializedGameState | null>(null);
 
   const [connected, setConnected] = useState(false);
-  const [role, setRole] = useState(null);
-  const [roomCode, setRoomCode] = useState(null);
-  const [scores, setScores] = useState({ p1: 0, p2: 0 });
+  const [role, setRole] = useState<PlayerId | null>(null);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [scores, setScores] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
   const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState(null);
+  const [winner, setWinner] = useState<string | null>(null);
   const [opponentLeft, setOpponentLeft] = useState(false);
-  const [lobbyError, setLobbyError] = useState(null);
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
   const [lobbyWaiting, setLobbyWaiting] = useState(false);
-  const onMatchedRef = useRef(null);
-  const onMazeRef = useRef(null);
+  const onMatchedRef = useRef<((code: string) => void) | null>(null);
+  const onMazeRef = useRef<((maze: Maze) => void) | null>(null);
 
   // Auth state
-  const [currentUser, setCurrentUser] = useState(() => loadStoredUser());
-  const [authError, setAuthError] = useState(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => loadStoredUser());
+  const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
   // Re-associate username whenever socket reconnects
@@ -47,12 +138,12 @@ export function SocketProvider({ children }) {
     });
     socket.on('disconnect', () => setConnected(false));
 
-    socket.on('room_created', ({ roomCode: code }) => {
+    socket.on('room_created', ({ roomCode: code }: { roomCode: string }) => {
       setRoomCode(code);
       setLobbyWaiting(true);
     });
 
-    socket.on('matched', ({ roomCode: code, role: assignedRole }) => {
+    socket.on('matched', ({ roomCode: code, role: assignedRole }: { roomCode: string; role: PlayerId }) => {
       setRoomCode(code);
       setRole(assignedRole);
       setLobbyWaiting(false);
@@ -60,7 +151,7 @@ export function SocketProvider({ children }) {
       onMatchedRef.current?.(code);
     });
 
-    socket.on('maze', (maze) => {
+    socket.on('maze', (maze: Maze) => {
       mazeRef.current = maze;
       setGameOver(false);
       setWinner(null);
@@ -68,14 +159,14 @@ export function SocketProvider({ children }) {
       onMazeRef.current?.(maze);
     });
 
-    socket.on('gameState', (state) => {
+    socket.on('gameState', (state: SerializedGameState) => {
       gameStateRef.current = state;
       if (state.scores) setScores({ ...state.scores });
       setGameOver(state.gameOver);
       setWinner(state.winner);
     });
 
-    socket.on('join_error', ({ message }) => {
+    socket.on('join_error', ({ message }: { message: string }) => {
       setLobbyError(message);
       setLobbyWaiting(false);
     });
@@ -85,7 +176,7 @@ export function SocketProvider({ children }) {
     });
 
     // Receive updated stats after a round ends
-    socket.on('stats_updated', (updatedUser) => {
+    socket.on('stats_updated', (updatedUser: User) => {
       setCurrentUser(updatedUser);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
     });
@@ -104,7 +195,7 @@ export function SocketProvider({ children }) {
   }, []);
 
   // Auth helpers
-  async function login(username, password) {
+  async function login(username: string, password: string): Promise<boolean> {
     setAuthLoading(true);
     setAuthError(null);
     try {
@@ -127,7 +218,7 @@ export function SocketProvider({ children }) {
     }
   }
 
-  async function register(username, password) {
+  async function register(username: string, password: string): Promise<boolean> {
     setAuthLoading(true);
     setAuthError(null);
     try {
@@ -148,7 +239,7 @@ export function SocketProvider({ children }) {
     }
   }
 
-  function logout() {
+  function logout(): void {
     localStorage.removeItem(STORAGE_KEY);
     setCurrentUser(null);
     socket.emit('set_username', null);
@@ -159,7 +250,7 @@ export function SocketProvider({ children }) {
     socket.emit('create_room');
   };
 
-  const joinRoom = (code) => {
+  const joinRoom = (code: string) => {
     if (!code || code.length < 4) { setLobbyError('Please enter a 4-letter code'); return; }
     setLobbyError(null);
     socket.emit('join_room', { roomCode: code });
@@ -172,7 +263,7 @@ export function SocketProvider({ children }) {
     socket.emit('random_match');
   };
 
-  const sendInput = (input) => socket.emit('input', input);
+  const sendInput = (input: PlayerInput) => socket.emit('input', input);
   const restart = () => socket.emit('restart');
 
   const resetLobby = () => {
@@ -198,7 +289,9 @@ export function SocketProvider({ children }) {
   );
 }
 
-export function useSocket() {
-  return useContext(SocketContext);
+export function useSocket(): SocketContextValue {
+  const ctx = useContext(SocketContext);
+  if (!ctx) throw new Error('useSocket must be used within SocketProvider');
+  return ctx;
 }
 

@@ -1,15 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useSocket } from './SocketContext';
-import { drawGame } from './renderer';
+import { useSocket } from '../context/SocketContext.tsx';
+import type { PlayerInput, PlayerId } from '../context/SocketContext.tsx';
+import { drawGame } from '../lib/renderer.ts';
 
 const CELL_SIZE = 60;
 
 export default function GamePage() {
-  const { gameId } = useParams();
+  const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
-  const canvasRef = useRef(null);
-  const keysRef = useRef({});
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const keysRef = useRef<Record<string, boolean>>({});
 
   const {
     connected, role, scores, gameOver, winner,
@@ -26,13 +27,13 @@ export default function GamePage() {
 
   // Keyboard capture
   useEffect(() => {
-    const down = (e) => {
+    const down = (e: KeyboardEvent) => {
       keysRef.current[e.code] = true;
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         e.preventDefault();
       }
     };
-    const up = (e) => { keysRef.current[e.code] = false; };
+    const up = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
@@ -53,14 +54,14 @@ export default function GamePage() {
         left: !!k[myKeys.left],
         right: !!k[myKeys.right],
         shoot: !!k[myKeys.shoot],
-      });
+      } as PlayerInput);
     }, 1000 / 60);
     return () => clearInterval(interval);
   }, [role, sendInput]);
 
   // Canvas render loop
   useEffect(() => {
-    let animId;
+    let animId: number;
     const render = () => {
       const canvas = canvasRef.current;
       if (canvas && mazeRef.current && gameStateRef.current) {

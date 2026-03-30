@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 
 // Mock canvas
-HTMLCanvasElement.prototype.getContext = () => ({
+HTMLCanvasElement.prototype.getContext = (() => ({
   fillRect: () => {},
   clearRect: () => {},
   fillStyle: '',
@@ -25,4 +25,4 @@ HTMLCanvasElement.prototype.getContext = () => ({
   textAlign: '',
   textBaseline: '',
   fillText: () => {},
-});
+})) as unknown as typeof HTMLCanvasElement.prototype.getContext;

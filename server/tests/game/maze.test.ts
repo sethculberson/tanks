@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateMaze } from './maze.js';
+import { generateMaze } from '../../src/game/maze.js';
 
 describe('generateMaze', () => {
   it('returns correct dimensions', () => {
@@ -55,10 +55,12 @@ describe('generateMaze', () => {
 
   it('maze is fully connected (all cells reachable from origin)', () => {
     const { cells, cols, rows } = generateMaze(9, 9);
-    const visited = new Set();
-    const stack = [{ x: 0, y: 0 }];
+    const visited = new Set<string>();
+    const stack: { x: number; y: number }[] = [{ x: 0, y: 0 }];
     while (stack.length) {
-      const { x, y } = stack.pop();
+      const item = stack.pop();
+      if (!item) continue;
+      const { x, y } = item;
       const key = `${x},${y}`;
       if (visited.has(key)) continue;
       visited.add(key);

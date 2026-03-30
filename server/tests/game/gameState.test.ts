@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createGameState, updateGameState } from './gameState.js';
+import { createGameState, updateGameState } from '../../src/game/gameState.js';
+import type { PlayerInput } from '../../src/game/gameState.js';
 
 describe('createGameState', () => {
   it('creates p1 and p2 tanks', () => {

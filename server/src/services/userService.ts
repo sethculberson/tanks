@@ -3,11 +3,37 @@ import { getDb } from './firebase.js';
 
 const USERS = 'users';
 
-function normalizeUsername(username) {
+export interface UserStats {
+  totalGames: number;
+  totalWins: number;
+  totalLosses: number;
+  shotsFired: number;
+  shotsHit: number;
+  shotsSelf: number;
+  shotsExpired: number;
+}
+
+export interface PublicUser {
+  username: string;
+  createdAt: FirebaseFirestore.Timestamp | Date;
+  lastPlayed: FirebaseFirestore.Timestamp | Date | null;
+  stats: UserStats;
+}
+
+export type StatsDelta = Partial<UserStats>;
+
+type ServiceResult<T> =
+  | { success: true } & T
+  | { error: string };
+
+function normalizeUsername(username: string): string {
   return username.toLowerCase().trim();
 }
 
-export async function registerUser(username, password) {
+export async function registerUser(
+  username: string,
+  password: string,
+): Promise<ServiceResult<{ username: string }>> {
   const db = getDb();
   if (!db) return { error: 'Database unavailable' };
 
@@ -44,7 +70,10 @@ export async function registerUser(username, password) {
   return { success: true, username: name };
 }
 
-export async function loginUser(username, password) {
+export async function loginUser(
+  username: string,
+  password: string,
+): Promise<ServiceResult<{ user: PublicUser }>> {
   const db = getDb();
   if (!db) return { error: 'Database unavailable' };
 
@@ -52,15 +81,17 @@ export async function loginUser(username, password) {
   const doc = await db.collection(USERS).doc(name).get();
   if (!doc.exists) return { error: 'Invalid username or password' };
 
-  const data = doc.data();
+  const data = doc.data() as { passwordHash: string } & PublicUser;
   const valid = await bcrypt.compare(password, data.passwordHash);
   if (!valid) return { error: 'Invalid username or password' };
 
-  const { passwordHash, ...publicData } = data;
-  return { success: true, user: publicData };
+  const { passwordHash: _hash, ...publicData } = data;
+  return { success: true, user: publicData as PublicUser };
 }
 
-export async function getUser(username) {
+export async function getUser(
+  username: string,
+): Promise<ServiceResult<{ user: PublicUser }>> {
   const db = getDb();
   if (!db) return { error: 'Database unavailable' };
 
@@ -68,12 +99,13 @@ export async function getUser(username) {
   const doc = await db.collection(USERS).doc(name).get();
   if (!doc.exists) return { error: 'User not found' };
 
-  const { passwordHash, ...publicData } = doc.data();
-  return { success: true, user: publicData };
+  const data = doc.data() as { passwordHash: string } & PublicUser;
+  const { passwordHash: _hash, ...publicData } = data;
+  return { success: true, user: publicData as PublicUser };
 }
 
 /** Atomically add delta values to a user's stats. */
-export async function updateUserStats(username, delta) {
+export async function updateUserStats(username: string, delta: StatsDelta): Promise<void> {
   const db = getDb();
   if (!db) return;
 
@@ -85,7 +117,7 @@ export async function updateUserStats(username, delta) {
       const doc = await tx.get(ref);
       if (!doc.exists) return;
 
-      const cur = doc.data().stats;
+      const cur = (doc.data() as { stats: UserStats }).stats;
       tx.update(ref, {
         lastPlayed: new Date(),
         stats: {
@@ -100,6 +132,6 @@ export async function updateUserStats(username, delta) {
       });
     });
   } catch (err) {
-    console.error(`[userService] Failed to update stats for ${username}:`, err.message);
+    console.error(`[userService] Failed to update stats for ${username}:`, (err as Error).message);
   }
 }

@@ -1,11 +1,9 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
-let db = null;
+let db: Firestore | null = null;
 
-export function initFirebase() {
+export function initFirebase(): void {
   if (getApps().length > 0) return;
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -34,6 +32,6 @@ export function initFirebase() {
   console.log('[Firebase] Connected to Firestore (tanks-db)');
 }
 
-export function getDb() {
+export function getDb(): Firestore | null {
   return db;
 }
