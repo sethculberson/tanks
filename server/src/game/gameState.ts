@@ -204,11 +204,15 @@ export function updateGameState(state: GameState, dt: number): void {
         const dist = Math.hypot(bullet.x - tank.x, bullet.y - tank.y);
         if (dist < TANK_RADIUS + BULLET_RADIUS) {
           tank.alive = false;
-          const winner = bullet.owner;
-          state.roundStats[winner].shotsHit++;
-          state.scores[winner]++;
-          state.gameOver = true;
-          state.winner = winner;
+          state.roundStats[bullet.owner].shotsHit++;
+          state.scores[bullet.owner]++;
+
+          const alivePlayers = (Object.entries(state.players) as [PlayerId, Tank][])
+            .filter(([, t]) => t.alive);
+          if (alivePlayers.length <= 1) {
+            state.gameOver = true;
+            state.winner = alivePlayers.length === 1 ? alivePlayers[0][0] : null;
+          }
           return false;
         }
       }
