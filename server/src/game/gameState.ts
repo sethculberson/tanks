@@ -10,7 +10,22 @@ const MAX_BOUNCES = 5;
 const BULLET_RADIUS = 4;
 const TANK_RADIUS = 14;
 
-export type PlayerId = 'p1' | 'p2';
+export const MAX_PLAYERS = 6;
+export const DEFAULT_MAX_PLAYERS = 2;
+
+export type PlayerId = 'p1' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6';
+
+// Six distinct spawn zones spread across the maze (cols=15, rows=11, interior cells 1–13 x 1–9).
+// Each zone occupies a corner or mid-edge to guarantee no two players spawn adjacent.
+// Within each zone a random cell is picked at runtime for slight variation.
+const SPAWN_ZONES: Array<{ xMin: number; xMax: number; yMin: number; yMax: number; angle: number }> = [
+  { xMin: 1,  xMax: 3,  yMin: 1, yMax: 3, angle: 135 }, // p1 top-left     → faces center
+  { xMin: 11, xMax: 13, yMin: 1, yMax: 3, angle: 225 }, // p2 top-right    → faces center
+  { xMin: 1,  xMax: 3,  yMin: 4, yMax: 6, angle: 90  }, // p3 mid-left     → faces right
+  { xMin: 11, xMax: 13, yMin: 4, yMax: 6, angle: 270 }, // p4 mid-right    → faces left
+  { xMin: 1,  xMax: 3,  yMin: 7, yMax: 9, angle: 45  }, // p5 bottom-left  → faces center
+  { xMin: 11, xMax: 13, yMin: 7, yMax: 9, angle: 315 }, // p6 bottom-right → faces center
+];
 
 export interface PlayerInput {
   up: boolean;
@@ -56,43 +71,47 @@ export interface GameState {
   gameOver: boolean;
   winner: PlayerId | null;
   bulletIdCounter: number;
+  maxPlayers: number;
   roundStats: Record<PlayerId, RoundStats>;
 }
 
-export function createGameState(): GameState {
+export function createGameState(maxPlayers: number = DEFAULT_MAX_PLAYERS): GameState {
   const maze = generateMaze(15, 11);
 
-  const players: Record<PlayerId, Tank> = {
-    p1: createTank(1, maze),
-    p2: createTank(2, maze),
-  };
+  const players: Partial<Record<PlayerId, Tank>> = {};
+  const scores: Partial<Record<PlayerId, number>> = {};
+  const roundStats: Partial<Record<PlayerId, RoundStats>> = {};
+
+  for (let i = 1; i <= maxPlayers; i++) {
+    const id = `p${i}` as PlayerId;
+    players[id] = createTank(i, maze);
+    scores[id] = 0;
+    roundStats[id] = { shotsFired: 0, shotsHit: 0, shotsSelf: 0, shotsExpired: 0 };
+  }
 
   return {
     maze,
-    players,
+    players: players as Record<PlayerId, Tank>,
     bullets: [],
-    scores: { p1: 0, p2: 0 },
+    scores: scores as Record<PlayerId, number>,
     gameOver: false,
     winner: null,
     bulletIdCounter: 0,
+    maxPlayers,
     // Per-round stats reset each game; aggregated into Firestore on game end
-    roundStats: {
-      p1: { shotsFired: 0, shotsHit: 0, shotsSelf: 0, shotsExpired: 0 },
-      p2: { shotsFired: 0, shotsHit: 0, shotsSelf: 0, shotsExpired: 0 },
-    },
+    roundStats: roundStats as Record<PlayerId, RoundStats>,
   };
 }
 
 function createTank(playerNum: number, maze: Maze): Tank {
-  // Spawn positions: p1 top-left area, p2 bottom-right area
-  const spawnCell = playerNum === 1
-    ? { x: 1, y: 1 }
-    : { x: maze.cols - 2, y: maze.rows - 2 };
+  const zone = SPAWN_ZONES[playerNum - 1];
+  const cellX = zone.xMin + Math.floor(Math.random() * (zone.xMax - zone.xMin + 1));
+  const cellY = zone.yMin + Math.floor(Math.random() * (zone.yMax - zone.yMin + 1));
   return {
     id: `p${playerNum}` as PlayerId,
-    x: spawnCell.x * CELL_SIZE + CELL_SIZE / 2,
-    y: spawnCell.y * CELL_SIZE + CELL_SIZE / 2,
-    angle: playerNum === 1 ? 0 : 180,
+    x: cellX * CELL_SIZE + CELL_SIZE / 2,
+    y: cellY * CELL_SIZE + CELL_SIZE / 2,
+    angle: zone.angle,
     alive: true,
     input: { up: false, down: false, left: false, right: false, shoot: false },
     shootCooldown: 0,
@@ -182,7 +201,6 @@ export function updateGameState(state: GameState, dt: number): void {
       // Tank hit detection — bullet cannot hit its own owner
       for (const [pid, tank] of Object.entries(players) as [PlayerId, Tank][]) {
         if (!tank.alive) continue;
-        if (pid === bullet.owner) continue;
         const dist = Math.hypot(bullet.x - tank.x, bullet.y - tank.y);
         if (dist < TANK_RADIUS + BULLET_RADIUS) {
           tank.alive = false;

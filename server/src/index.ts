@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -14,6 +15,8 @@ import {
   handleRestart,
   handleDisconnect,
   getRoomMaze,
+  getRoomPlayers,
+  getRoomMaxPlayers,
   setRoomUsername,
   playerMap,
 } from './game/rooms.js';
@@ -43,10 +46,12 @@ io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
   // Player wants to create a private room
-  socket.on('create_room', () => {
-    const code = createRoom(socket.id, io);
+  socket.on('create_room', ({ maxPlayers }: { maxPlayers?: number } = {}) => {
+    const playerCount = Math.min(Math.max(maxPlayers ?? 2, 2), 6);
+    const code = createRoom(socket.id, io, playerCount);
     socket.join(code);
-    socket.emit('room_created', { roomCode: code, role: 'p1' });
+    socket.emit('room_created', { roomCode: code, role: 'p1', maxPlayers: playerCount });
+    socket.emit('lobby_update', { current: 1, max: playerCount });
   });
 
   // Player wants to join a specific room by code
@@ -59,15 +64,23 @@ io.on('connection', (socket) => {
     }
     socket.join(code);
 
-    // Send maze to both players and notify both of their roles
-    const maze = getRoomMaze(socket.id);
-    io.to(code).emit('maze', maze);
-    // Notify p2 of their role + room
-    socket.emit('matched', { roomCode: code, role: 'p2' });
-    // Notify p1 that opponent joined
-    const p1info = [...playerMap.entries()].find(([, v]) => v.roomCode === code && v.role === 'p1');
-    if (p1info) {
-      io.to(p1info[0]).emit('matched', { roomCode: code, role: 'p1' });
+    if (result.isFull) {
+      // Room is full — game starts now
+      const maze = getRoomMaze(socket.id);
+      io.to(code).emit('maze', maze);
+      // Notify each player of their specific role
+      for (const [role, sid] of Object.entries(getRoomPlayers(code))) {
+        if (sid) io.to(sid).emit('matched', { roomCode: code, role });
+      }
+    } else {
+      // Room partially filled — notify new joiner of their role, update everyone's count
+      socket.emit('room_joined', {
+        roomCode: code,
+        role: result.role,
+        current: result.currentPlayers,
+        max: getRoomMaxPlayers(code),
+      });
+      io.to(code).emit('lobby_update', { current: result.currentPlayers, max: getRoomMaxPlayers(code) });
     }
   });
 
@@ -109,8 +122,10 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     const result = handleDisconnect(socket.id);
-    if (result?.otherSocketId) {
-      io.to(result.otherSocketId).emit('opponent_disconnected');
+    if (result?.otherSocketIds.length) {
+      for (const sid of result.otherSocketIds) {
+        io.to(sid).emit('opponent_disconnected');
+      }
     }
   });
 });

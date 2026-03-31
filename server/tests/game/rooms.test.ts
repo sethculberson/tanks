@@ -159,7 +159,7 @@ describe('handleDisconnect', () => {
     const code = createRoom('p1socket', io);
     joinRoom(code, 'p2socket', io);
     const result = handleDisconnect('p1socket');
-    expect(result!.otherSocketId).toBe('p2socket');
+    expect(result!.otherSocketIds).toContain('p2socket');
   });
 
   it('cleans up other player from map when one disconnects', () => {

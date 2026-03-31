@@ -88,7 +88,7 @@ describe('LobbyPage', () => {
 
   it('shows waiting message when room is created', () => {
     renderLobby({ roomCode: 'ABCD' });
-    expect(screen.getByText('Waiting for opponent to join...')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for players to join...')).toBeInTheDocument();
   });
 
   it('hides Create Room button when roomCode is set', () => {

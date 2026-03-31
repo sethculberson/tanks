@@ -39,12 +39,12 @@ export default function GamePage() {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, []);
 
-  // Input emission — only for own role
+  // Input emission — WASD+Space for all players (each player on their own device)
   useEffect(() => {
     if (!role) return;
-    const p1Keys = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', shoot: 'Space' };
-    const p2Keys = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', shoot: 'Enter' };
-    const myKeys = role === 'p1' ? p1Keys : p2Keys;
+    const myKeys = role === 'p2'
+      ? { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', shoot: 'Enter' }
+      : { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', shoot: 'Space' };
 
     const interval = setInterval(() => {
       const k = keysRef.current;
@@ -80,7 +80,8 @@ export default function GamePage() {
 
   const mazeWidth = mazeRef.current ? mazeRef.current.cols * CELL_SIZE : 900;
   const mazeHeight = mazeRef.current ? mazeRef.current.rows * CELL_SIZE : 660;
-  const myLabel = role === 'p1' ? 'Player 1 — WASD + Space' : 'Player 2 — Arrows + Enter';
+  const myLabel = role === 'p2' ? 'Player 2 — Arrows + Enter' : `Player ${role?.replace('p', '')} — WASD + Space`;
+  const winnerLabel = winner ? `Player ${winner.replace('p', '')} wins` : '';
 
   return (
     <div className="page-center">
@@ -88,8 +89,9 @@ export default function GamePage() {
 
       {/* Score bar */}
       <div className="status-bar" style={{ width: mazeWidth }}>
-        <p className="status-bar-field">P1: {scores.p1}</p>
-        <p className="status-bar-field">P2: {scores.p2}</p>
+        {Object.entries(scores).map(([pid, score]) => (
+          <p key={pid} className="status-bar-field">P{pid.replace('p', '')}: {score}</p>
+        ))}
         <p className="status-bar-field">Room: {gameId}</p>
         <p className="status-bar-field">{myLabel}</p>
       </div>
@@ -116,9 +118,7 @@ export default function GamePage() {
                 <h2 style={{ fontSize: 24, marginBottom: 8 }}>
                   {winner === role ? 'You Win!' : 'You Lose.'}
                   <br />
-                  <small style={{ fontSize: 14 }}>
-                    ({winner === 'p1' ? 'Player 1' : 'Player 2'} wins)
-                  </small>
+                  <small style={{ fontSize: 14 }}>({winnerLabel})</small>
                 </h2>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                   <button onClick={restart}>Play Again</button>

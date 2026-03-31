@@ -5,13 +5,14 @@ import { useSocket } from '../context/SocketContext.tsx';
 export default function LobbyPage() {
   const navigate = useNavigate();
   const {
-    lobbyError, lobbyWaiting, roomCode,
+    lobbyError, lobbyWaiting, roomCode, lobbyPlayerCount,
     createRoom, joinRoom, randomMatch,
     onMatchedRef, currentUser, logout,
   } = useSocket();
 
   const [codeInput, setCodeInput] = useState('');
   const [showStats, setShowStats] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState(2);
 
   // Navigate to game when matched
   useState(() => {
@@ -98,10 +99,28 @@ export default function LobbyPage() {
               <>
                 <p style={{ marginBottom: 4 }}>Your room code:</p>
                 <p className="room-code">{roomCode}</p>
-                <p><em>Waiting for opponent to join...</em></p>
+                <p><em>
+                  {lobbyPlayerCount
+                    ? `Waiting for players... (${lobbyPlayerCount.current}/${lobbyPlayerCount.max})`
+                    : 'Waiting for players to join...'}
+                </em></p>
               </>
             ) : (
-              <button onClick={createRoom}>Create Room</button>
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <label htmlFor="max-players" style={{ whiteSpace: 'nowrap' }}>Max players:</label>
+                  <select
+                    id="max-players"
+                    value={maxPlayers}
+                    onChange={e => setMaxPlayers(Number(e.target.value))}
+                  >
+                    {[2, 3, 4, 5, 6].map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
+                <button onClick={() => createRoom(maxPlayers)}>Create Room</button>
+              </>
             )}
           </div>
         </div>
@@ -133,7 +152,7 @@ export default function LobbyPage() {
 
       <div className="status-bar" style={{ width: 340 }}>
         <p className="status-bar-field">Tank Trouble v1.0</p>
-        <p className="status-bar-field">2 Players</p>
+        <p className="status-bar-field">2–6 Players</p>
       </div>
     </div>
   );

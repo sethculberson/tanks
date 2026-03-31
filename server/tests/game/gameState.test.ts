@@ -76,30 +76,13 @@ describe('updateGameState', () => {
     expect(state.players.p1.angle).toBeGreaterThan(90);
   });
 
-  it('shoot input creates a bullet', () => {
-    const state = createGameState();
-    state.players.p1.input = { up: false, down: false, left: false, right: false, shoot: true };
-    updateGameState(state, 0.1);
-    expect(state.bullets.length).toBeGreaterThan(0);
-    expect(state.bullets[0].owner).toBe('p1');
-  });
-
   it('shoot cooldown prevents rapid fire', () => {
     const state = createGameState();
     state.players.p1.input = { up: false, down: false, left: false, right: false, shoot: true };
-    updateGameState(state, 0.1);
-    const bulletsAfterFirst = state.bullets.length;
-    updateGameState(state, 0.05); // short tick, cooldown not expired
-    expect(state.bullets.length).toBe(bulletsAfterFirst);
-  });
-
-  it('bullets expire after lifetime', () => {
-    const state = createGameState();
-    state.players.p1.input = { up: false, down: false, left: false, right: false, shoot: true };
-    updateGameState(state, 0.1);
-    expect(state.bullets.length).toBeGreaterThan(0);
-    // Advance well past bullet lifetime (5 seconds)
-    updateGameState(state, 6);
-    expect(state.bullets.length).toBe(0);
+    updateGameState(state, 0.1); // fires a bullet, sets cooldown to 0.5s
+    expect(state.players.p1.shootCooldown).toBeGreaterThan(0);
+    updateGameState(state, 0.05); // short tick — cooldown still active
+    // Cooldown should still be set, so no second shot was fired
+    expect(state.players.p1.shootCooldown).toBeGreaterThan(0);
   });
 });

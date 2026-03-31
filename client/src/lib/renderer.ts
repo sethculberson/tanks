@@ -8,6 +8,16 @@ const FLOOR_B = '#c49558';   // darker wood plank
 const WALL_COLOR = '#3b1f0a'; // dark walnut
 const BG_COLOR = '#b8833a';
 
+// Earthy body / dark accent per player slot
+const TANK_COLORS: Array<{ body: string; dark: string; bullet: string }> = [
+  { body: '#6b7c3a', dark: '#3d4a1f', bullet: '#2e4a1a' }, // p1 olive green
+  { body: '#7c3a3a', dark: '#4a1f1f', bullet: '#4a1a1a' }, // p2 maroon
+  { body: '#3a6b7c', dark: '#1f3d4a', bullet: '#1a2e4a' }, // p3 teal
+  { body: '#7c6b3a', dark: '#4a3d1f', bullet: '#4a3a1a' }, // p4 golden brown
+  { body: '#6b3a7c', dark: '#3d1f4a', bullet: '#2e1a4a' }, // p5 purple
+  { body: '#3a7c5a', dark: '#1f4a30', bullet: '#1a4a2e' }, // p6 forest green
+];
+
 export function drawGame(canvas: HTMLCanvasElement, maze: Maze, state: SerializedGameState): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -58,9 +68,11 @@ export function drawGame(canvas: HTMLCanvasElement, maze: Maze, state: Serialize
     }
   }
 
-  // Draw bullets — plain dark circles
+  // Draw bullets — colored by owner
   for (const bullet of state.bullets) {
-    ctx.fillStyle = bullet.owner === 'p1' ? '#2e4a1a' : '#4a1a1a';
+    const playerIdx = parseInt(bullet.owner.replace('p', ''), 10) - 1;
+    const colors = TANK_COLORS[Math.min(playerIdx, TANK_COLORS.length - 1)];
+    ctx.fillStyle = colors.bullet;
     ctx.beginPath();
     ctx.arc(bullet.x, bullet.y, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -77,10 +89,12 @@ export function drawGame(canvas: HTMLCanvasElement, maze: Maze, state: Serialize
 }
 
 function drawTank(ctx: CanvasRenderingContext2D, tank: TankState, id: string): void {
-  // Muted earthy colors: olive green vs dark maroon
-  const bodyColor  = id === 'p1' ? '#6b7c3a' : '#7c3a3a';
-  const darkColor  = id === 'p1' ? '#3d4a1f' : '#4a1f1f';
+  const playerIdx = parseInt(id.replace('p', ''), 10) - 1;
+  const colors = TANK_COLORS[Math.min(playerIdx, TANK_COLORS.length - 1)];
+  const bodyColor  = colors.body;
+  const darkColor  = colors.dark;
   const treadColor = '#2a1a0a';
+  const playerNum = id.replace('p', '');
 
   ctx.save();
   ctx.translate(tank.x, tank.y);
@@ -123,7 +137,7 @@ function drawTank(ctx: CanvasRenderingContext2D, tank: TankState, id: string): v
   ctx.font = 'bold 10px "Times New Roman", serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(id === 'p1' ? '1' : '2', 0, 1);
+  ctx.fillText(playerNum, 0, 1);
 
   ctx.restore();
 }

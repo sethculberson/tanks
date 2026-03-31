@@ -15,8 +15,9 @@ const TICK_RATE = 60;
 interface Room {
   code: string;
   state: GameState;
-  players: Record<PlayerId, string | null>;
-  usernames: Record<PlayerId, string | null>;
+  players: Partial<Record<PlayerId, string | null>>;
+  usernames: Partial<Record<PlayerId, string | null>>;
+  maxPlayers: number;
   io: Server;
   intervalId: ReturnType<typeof setInterval> | null;
   lastTime: number;
@@ -38,7 +39,7 @@ interface MatchResult {
 
 interface DisconnectResult {
   roomCode: string;
-  otherSocketId: string | null;
+  otherSocketIds: string[];
 }
 
 function generateRoomCode(): string {
@@ -83,7 +84,7 @@ async function commitRoundStats(room: Room): Promise<void> {
   const { winner, roundStats } = room.state;
   const tasks: Promise<void>[] = [];
 
-  for (const role of ['p1', 'p2'] as PlayerId[]) {
+  for (const role of Object.keys(room.players) as PlayerId[]) {
     const username = room.usernames[role];
     if (!username) continue;
     tasks.push(
@@ -98,7 +99,7 @@ async function commitRoundStats(room: Room): Promise<void> {
   await Promise.all(tasks);
 
   // Push refreshed stats back to each player
-  for (const role of ['p1', 'p2'] as PlayerId[]) {
+  for (const role of Object.keys(room.players) as PlayerId[]) {
     const socketId = room.players[role];
     const username = room.usernames[role];
     if (!socketId || !username) continue;
@@ -117,13 +118,23 @@ function setRoomUsername(socketId: string, username: string | null): void {
   room.usernames[info.role] = username ? username.toLowerCase().trim() : null;
 }
 
-function createRoom(p1SocketId: string, io: Server): string {
+function createRoom(p1SocketId: string, io: Server, maxPlayers: number = 2): string {
   const code = generateRoomCode();
+
+  const players: Partial<Record<PlayerId, string | null>> = {};
+  const usernames: Partial<Record<PlayerId, string | null>> = {};
+  for (let i = 1; i <= maxPlayers; i++) {
+    const id = `p${i}` as PlayerId;
+    players[id] = i === 1 ? p1SocketId : null;
+    usernames[id] = null;
+  }
+
   const room: Room = {
     code,
-    state: createGameState(),
-    players: { p1: p1SocketId, p2: null },
-    usernames: { p1: null, p2: null },
+    state: createGameState(maxPlayers),
+    players,
+    usernames,
+    maxPlayers,
     io,
     intervalId: null,
     lastTime: Date.now(),
@@ -134,14 +145,23 @@ function createRoom(p1SocketId: string, io: Server): string {
   return code;
 }
 
-function joinRoom(code: string, p2SocketId: string, io: Server): { success: true } | { error: string } {
+// Returns the role assigned to the joiner, whether the room is now full, and current player count.
+function joinRoom(code: string, socketId: string, io: Server): { success: true; role: PlayerId; isFull: boolean; currentPlayers: number } | { error: string } {
   const room = rooms.get(code);
   if (!room) return { error: 'Room not found' };
-  if (room.players.p2) return { error: 'Room is full' };
-  room.players.p2 = p2SocketId;
-  playerMap.set(p2SocketId, { roomCode: code, role: 'p2' });
-  startRoomLoop(room);
-  return { success: true };
+
+  const allRoles = Array.from({ length: room.maxPlayers }, (_, i) => `p${i + 1}` as PlayerId);
+  const nextRole = allRoles.find(r => room.players[r] === null);
+  if (!nextRole) return { error: 'Room is full' };
+
+  room.players[nextRole] = socketId;
+  playerMap.set(socketId, { roomCode: code, role: nextRole });
+
+  const currentPlayers = allRoles.filter(r => room.players[r] !== null).length;
+  const isFull = currentPlayers === room.maxPlayers;
+  if (isFull) startRoomLoop(room);
+
+  return { success: true, role: nextRole, isFull, currentPlayers };
 }
 
 function findOrCreateRandomRoom(socketId: string, io: Server): MatchResult {
@@ -183,7 +203,7 @@ function handleRestart(socketId: string): boolean {
     room.intervalId = null;
   }
   const scores = { ...room.state.scores };
-  room.state = createGameState();
+  room.state = createGameState(room.maxPlayers);
   room.state.scores = scores;
   room.statsCommitted = false;
   room.io.to(info.roomCode).emit('maze', room.state.maze);
@@ -207,13 +227,13 @@ function handleDisconnect(socketId: string): DisconnectResult | null {
     room.intervalId = null;
   }
 
-  const otherRole: PlayerId = info.role === 'p1' ? 'p2' : 'p1';
-  const otherSocketId = room.players[otherRole];
+  const otherSocketIds: string[] = (Object.values(room.players) as (string | null)[])
+    .filter((sid): sid is string => sid !== null && sid !== socketId);
 
   rooms.delete(info.roomCode);
-  if (otherSocketId) playerMap.delete(otherSocketId);
+  for (const sid of otherSocketIds) playerMap.delete(sid);
 
-  return { roomCode: info.roomCode, otherSocketId };
+  return { roomCode: info.roomCode, otherSocketIds };
 }
 
 function getRoomMaze(socketId: string) {
@@ -221,6 +241,14 @@ function getRoomMaze(socketId: string) {
   if (!info) return null;
   const room = rooms.get(info.roomCode);
   return room ? room.state.maze : null;
+}
+
+function getRoomPlayers(code: string): Partial<Record<PlayerId, string | null>> {
+  return rooms.get(code)?.players ?? {};
+}
+
+function getRoomMaxPlayers(code: string): number {
+  return rooms.get(code)?.maxPlayers ?? 2;
 }
 
 export {
@@ -231,6 +259,8 @@ export {
   handleRestart,
   handleDisconnect,
   getRoomMaze,
+  getRoomPlayers,
+  getRoomMaxPlayers,
   setRoomUsername,
   playerMap,
 };

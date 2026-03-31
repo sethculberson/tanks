@@ -6,7 +6,7 @@ const socket = io(SERVER_URL);
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
-export type PlayerId = 'p1' | 'p2';
+export type PlayerId = 'p1' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6';
 
 export interface PlayerInput {
   up: boolean;
@@ -45,7 +45,7 @@ export interface BulletState {
 export interface SerializedGameState {
   players: Record<string, TankState>;
   bullets: BulletState[];
-  scores: { p1: number; p2: number };
+  scores: Record<string, number>;
   gameOver: boolean;
   winner: string | null;
 }
@@ -69,17 +69,18 @@ export interface SocketContextValue {
   connected: boolean;
   role: PlayerId | null;
   roomCode: string | null;
-  scores: { p1: number; p2: number };
+  scores: Record<string, number>;
   gameOver: boolean;
   winner: string | null;
   opponentLeft: boolean;
   lobbyError: string | null;
   lobbyWaiting: boolean;
+  lobbyPlayerCount: { current: number; max: number } | null;
   mazeRef: React.MutableRefObject<Maze | null>;
   gameStateRef: React.MutableRefObject<SerializedGameState | null>;
   onMatchedRef: React.MutableRefObject<((code: string) => void) | null>;
   onMazeRef: React.MutableRefObject<((maze: Maze) => void) | null>;
-  createRoom: () => void;
+  createRoom: (maxPlayers?: number) => void;
   joinRoom: (code: string) => void;
   randomMatch: () => void;
   sendInput: (input: PlayerInput) => void;
@@ -115,12 +116,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [role, setRole] = useState<PlayerId | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(null);
-  const [scores, setScores] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
+  const [scores, setScores] = useState<Record<string, number>>({ p1: 0, p2: 0 });
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
   const [opponentLeft, setOpponentLeft] = useState(false);
   const [lobbyError, setLobbyError] = useState<string | null>(null);
   const [lobbyWaiting, setLobbyWaiting] = useState(false);
+  const [lobbyPlayerCount, setLobbyPlayerCount] = useState<{ current: number; max: number } | null>(null);
   const onMatchedRef = useRef<((code: string) => void) | null>(null);
   const onMazeRef = useRef<((maze: Maze) => void) | null>(null);
 
@@ -138,9 +140,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
     socket.on('disconnect', () => setConnected(false));
 
-    socket.on('room_created', ({ roomCode: code }: { roomCode: string }) => {
+    socket.on('room_created', ({ roomCode: code, maxPlayers }: { roomCode: string; maxPlayers: number }) => {
       setRoomCode(code);
       setLobbyWaiting(true);
+      setLobbyPlayerCount({ current: 1, max: maxPlayers });
+    });
+
+    socket.on('room_joined', ({ roomCode: code, role: assignedRole, current, max }: { roomCode: string; role: PlayerId; current: number; max: number }) => {
+      setRoomCode(code);
+      setRole(assignedRole);
+      setLobbyWaiting(true);
+      setLobbyError(null);
+      setLobbyPlayerCount({ current, max });
+    });
+
+    socket.on('lobby_update', ({ current, max }: { current: number; max: number }) => {
+      setLobbyPlayerCount({ current, max });
     });
 
     socket.on('matched', ({ roomCode: code, role: assignedRole }: { roomCode: string; role: PlayerId }) => {
@@ -148,6 +163,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setRole(assignedRole);
       setLobbyWaiting(false);
       setLobbyError(null);
+      setLobbyPlayerCount(null);
       onMatchedRef.current?.(code);
     });
 
@@ -165,7 +181,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setGameOver(state.gameOver);
       setWinner(state.winner);
     });
-
     socket.on('join_error', ({ message }: { message: string }) => {
       setLobbyError(message);
       setLobbyWaiting(false);
@@ -185,6 +200,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('room_created');
+      socket.off('room_joined');
+      socket.off('lobby_update');
       socket.off('matched');
       socket.off('maze');
       socket.off('gameState');
@@ -245,9 +262,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socket.emit('set_username', null);
   }
 
-  const createRoom = () => {
+  const createRoom = (maxPlayers: number = 2) => {
     setLobbyError(null);
-    socket.emit('create_room');
+    socket.emit('create_room', { maxPlayers });
   };
 
   const joinRoom = (code: string) => {
@@ -271,6 +288,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     setRoomCode(null);
     setLobbyWaiting(false);
     setLobbyError(null);
+    setLobbyPlayerCount(null);
     setOpponentLeft(false);
     mazeRef.current = null;
     gameStateRef.current = null;
@@ -279,7 +297,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   return (
     <SocketContext.Provider value={{
       connected, role, roomCode, scores, gameOver, winner,
-      opponentLeft, lobbyError, lobbyWaiting,
+      opponentLeft, lobbyError, lobbyWaiting, lobbyPlayerCount,
       mazeRef, gameStateRef, onMatchedRef, onMazeRef,
       createRoom, joinRoom, randomMatch, sendInput, restart, resetLobby,
       currentUser, authError, authLoading, login, register, logout,
