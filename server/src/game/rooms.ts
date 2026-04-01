@@ -51,13 +51,14 @@ function generateRoomCode(): string {
   return code;
 }
 
-function serializeState(state: GameState) {
+function serializeState(state: GameState, usernames: Partial<Record<PlayerId, string | null>>) {
   return {
     players: state.players,
     bullets: state.bullets,
     scores: state.scores,
     gameOver: state.gameOver,
     winner: state.winner,
+    usernames: usernames as Record<string, string | null>,
   };
 }
 
@@ -70,7 +71,7 @@ function startRoomLoop(room: Room): void {
     const dt = (now - room.lastTime) / 1000;
     room.lastTime = now;
     updateGameState(room.state, dt);
-    room.io.to(room.code).emit('gameState', serializeState(room.state));
+    room.io.to(room.code).emit('gameState', serializeState(room.state, room.usernames));
 
     // Persist round stats exactly once when the game ends
     if (room.state.gameOver && !room.statsCommitted) {

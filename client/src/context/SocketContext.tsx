@@ -48,6 +48,7 @@ export interface SerializedGameState {
   scores: Record<string, number>;
   gameOver: boolean;
   winner: string | null;
+  usernames: Record<string, string | null>;
 }
 
 export interface UserStats {
@@ -265,12 +266,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const createRoom = (maxPlayers: number = 2) => {
     setLobbyError(null);
     socket.emit('create_room', { maxPlayers });
+    const user = loadStoredUser();
+    if (user?.username) socket.emit('set_username', user.username);
   };
 
   const joinRoom = (code: string) => {
     if (!code || code.length < 4) { setLobbyError('Please enter a 4-letter code'); return; }
     setLobbyError(null);
     socket.emit('join_room', { roomCode: code });
+    const user = loadStoredUser();
+    if (user?.username) socket.emit('set_username', user.username);
   };
 
   const randomMatch = () => {
@@ -278,6 +283,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     setLobbyWaiting(true);
     setRoomCode(null);
     socket.emit('random_match');
+    const user = loadStoredUser();
+    if (user?.username) socket.emit('set_username', user.username);
   };
 
   const sendInput = (input: PlayerInput) => socket.emit('input', input);

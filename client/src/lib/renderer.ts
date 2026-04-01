@@ -85,7 +85,39 @@ export function drawGame(canvas: HTMLCanvasElement, maze: Maze, state: Serialize
   for (const [id, tank] of Object.entries(state.players)) {
     if (!tank.alive) continue;
     drawTank(ctx, tank, id);
+    const username = state.usernames?.[id];
+    if (username) drawUsernameLabel(ctx, tank, username);
   }
+}
+
+function drawUsernameLabel(ctx: CanvasRenderingContext2D, tank: TankState, username: string): void {
+  const label = username.length > 12 ? username.slice(0, 12) + '…' : username;
+  ctx.save();
+  ctx.translate(tank.x, tank.y);
+
+  const fontSize = 11;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  const textWidth = ctx.measureText(label).width;
+  const padX = 4;
+  const padY = 2;
+  const bgW = textWidth + padX * 2;
+  const bgH = fontSize + padY * 2;
+  const bgX = -bgW / 2;
+  const bgY = -30 - bgH;
+
+  // Background pill
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.beginPath();
+  ctx.roundRect(bgX, bgY, bgW, bgH, 3);
+  ctx.fill();
+
+  // Username text
+  ctx.fillStyle = '#f5e6c8';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 0, bgY + bgH / 2);
+
+  ctx.restore();
 }
 
 function drawTank(ctx: CanvasRenderingContext2D, tank: TankState, id: string): void {
